@@ -290,26 +290,32 @@ func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outp
 	//set encoding
 	C.iptc_data_set_encoding_utf8(cgoImageIptcData)
 
+	var success C.int
 	//edit iptc image info
 	//city
 	if iptcReq.City != "" {
-		cgoCityDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_KEYWORDS)
+		cgoCityDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_CITY)
 		if cgoCityDataset == nil {
 			cgoCityDataset := C.iptc_dataset_new()
 			defer C.iptc_dataset_free(cgoCityDataset)
 
 			C.iptc_dataset_set_tag(cgoCityDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_CITY)
-			C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
+			success = C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
 				C.uint(len(iptcReq.City)), C.IPTC_VALIDATE)
-			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoCityDataset)
+			if success <= 0 {
+				err = errors.New("add attribute City failed")
+				return
+			}
+			success = C.iptc_data_add_dataset(cgoImageIptcData, cgoCityDataset)
 			if success != 0 {
 				err = errors.New("add attribute City failed")
 				return
 			}
 		} else {
-			success := C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
+			//Returns : -1 on error, 0 if validation failed, the number of bytes copied on success
+			success = C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
 				C.uint(len(iptcReq.City)), C.IPTC_VALIDATE)
-			if success != 0 {
+			if success <= 0 {
 				err = errors.New("edit attribute City failed")
 				return
 			}
@@ -324,17 +330,22 @@ func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outp
 			defer C.iptc_dataset_free(cgoObjectNameDataset)
 
 			C.iptc_dataset_set_tag(cgoObjectNameDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_OBJECT_NAME)
-			C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
+			success = C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
 				C.uint(len(iptcReq.ObjectName)), C.IPTC_VALIDATE)
-			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoObjectNameDataset)
+			if success <= 0 {
+				err = errors.New("add attribute ObjectName failed")
+				return
+			}
+			success = C.iptc_data_add_dataset(cgoImageIptcData, cgoObjectNameDataset)
 			if success != 0 {
 				err = errors.New("add attribute ObjectName failed")
 				return
 			}
 		} else {
-			success := C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
+			//Returns : -1 on error, 0 if validation failed, the number of bytes copied on success
+			success = C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
 				C.uint(len(iptcReq.ObjectName)), C.IPTC_VALIDATE)
-			if success != 0 {
+			if success <= 0 {
 				err = errors.New("edit attribute ObjectName failed")
 				return
 			}
@@ -349,17 +360,22 @@ func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outp
 			defer C.iptc_dataset_free(cgoProgramDataset)
 
 			C.iptc_dataset_set_tag(cgoProgramDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_ORIGINATING_PROGRAM)
-			C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
+			success = C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
 				C.uint(len(iptcReq.OriginatingProgram)), C.IPTC_VALIDATE)
+			if success <= 0 {
+				err = errors.New("add attribute OriginatingProgram failed")
+				return
+			}
 			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoProgramDataset)
 			if success != 0 {
 				err = errors.New("add attribute OriginatingProgram failed")
 				return
 			}
 		} else {
-			success := C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
+			//Returns : -1 on error, 0 if validation failed, the number of bytes copied on success
+			success = C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
 				C.uint(len(iptcReq.OriginatingProgram)), C.IPTC_VALIDATE)
-			if success != 0 {
+			if success <= 0 {
 				err = errors.New("edit attribute OriginatingProgram failed")
 				return
 			}
@@ -408,9 +424,13 @@ func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outp
 		defer C.iptc_dataset_free(newDataSet)
 
 		C.iptc_dataset_set_tag(newDataSet, C.IPTC_RECORD_APP_2, C.IPTC_TAG_KEYWORDS)
-		C.iptc_dataset_set_data(newDataSet, (*C.uchar)(unsafe.Pointer(C.CString(keyword))),
+		success = C.iptc_dataset_set_data(newDataSet, (*C.uchar)(unsafe.Pointer(C.CString(keyword))),
 			C.uint(len(keyword)), C.IPTC_VALIDATE)
-		success := C.iptc_data_add_dataset(cgoImageIptcData, newDataSet)
+		if success <= 0 {
+			err = errors.New("add attribute Keywords failed")
+			return
+		}
+		success = C.iptc_data_add_dataset(cgoImageIptcData, newDataSet)
 		if success != 0 {
 			err = errors.New("add attribute Keywords failed")
 			return
@@ -422,12 +442,13 @@ func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outp
 	//write iptc data into jpeg file
 	cgoOutputFile := C.CString(outputFile)
 	defer C.free(unsafe.Pointer(cgoOutputFile))
-	success := C.save_iptc_info_to_jpeg_file(cgoImageIptcData, cgoImageFile, cgoOutputFile)
+	success = C.save_iptc_info_to_jpeg_file(cgoImageIptcData, cgoImageFile, cgoOutputFile)
 	if success != 0 {
 		err = errors.New("write iptc info into image file failed")
 		return
 	}
 
+	log.Infof("[%s] write iptc info to image success", reqId)
 	result = outputFile
 	resultType = ufop.RESULT_TYPE_OCTET_FILE
 	contentType = "image/jpeg"

@@ -12,19 +12,76 @@ IptcDataSet *get_iptc_dataset(IptcData *iptcData, unsigned int);
 IptcDataSet *get_iptc_dataset(IptcData *iptcData, unsigned int i) {
 	return iptcData->datasets[i];
 }
+
+//return 0 on success, otherwise failure
+int save_iptc_info_to_jpeg_file(IptcData *iptcData, const char *inputFilePath, const char *outputFilePath);
+
+int save_iptc_info_to_jpeg_file(IptcData *iptcData, const char *inputFilePath, const char *outputFilePath) {
+    unsigned char *iptcBuf = NULL;
+    unsigned int iptcBufLen;
+    unsigned char ps3Buf[256 * 256];
+    int ps3Len;
+    int wLen;
+
+    unsigned char outBuf[255 * 255];
+    FILE *inputFile, *outputFile;
+
+    iptc_data_sort(iptcData);
+
+    inputFile = fopen(inputFilePath, "r");
+    if (!inputFile) {
+        fprintf(stderr, "failed to open src image file\n");
+        return -1;
+    }
+
+    ps3Len = iptc_jpeg_read_ps3(inputFile, ps3Buf, sizeof(ps3Buf));
+    fclose(inputFile);
+    if (ps3Len < 0) {
+        fprintf(stderr, "parse jpeg image file error");
+        return -1;
+    }
+
+    if (iptc_data_save(iptcData, &iptcBuf, &iptcBufLen) < 0) {
+        fprintf(stderr, "failed to generate IPTC bytestream\n");
+        return -1;
+    }
+
+    ps3Len = iptc_jpeg_ps3_save_iptc(ps3Buf, (unsigned int) ps3Len, iptcBuf, iptcBufLen, outBuf, sizeof(outBuf));
+    iptc_data_free_buf(iptcData, iptcBuf);
+
+    inputFile = fopen(inputFilePath, "r");
+    if (!inputFile) {
+        fprintf(stderr, "failed to open src image file\n");
+        return -1;
+    }
+
+    outputFile = fopen(outputFilePath, "w");
+    if (!outputFile) {
+        fprintf(stderr, "failed to open output image file\n");
+        return -1;
+    }
+
+    wLen = iptc_jpeg_save_with_ps3(inputFile, outputFile, outBuf, (unsigned int) ps3Len);
+    fclose(outputFile);
+    if (wLen < 0) {
+        fprintf(stderr, "failed to wrtie iptc info into image file\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 */
 import "C"
 
 import (
-	"errors"
-	"fmt"
-	"github.com/qiniu/log"
-	"io"
-	//"net/http"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/jemygraw/base/container/set"
+	"errors"
+	"fmt"
 	"image/jpeg"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,6 +90,9 @@ import (
 	"ufop"
 	"ufop/utils"
 	"unsafe"
+
+	"github.com/jemygraw/base/container/set"
+	"github.com/qiniu/log"
 )
 
 type IptcManager struct {
@@ -41,11 +101,11 @@ type IptcManager struct {
 type IptcConfig struct {
 }
 
-func (this *IptcManager) Name() string {
+func (m *IptcManager) Name() string {
 	return "iptc"
 }
 
-func (this *IptcManager) InitConfig(jobConf string) (err error) {
+func (m *IptcManager) InitConfig(jobConf string) (err error) {
 	return
 }
 
@@ -57,7 +117,7 @@ iptc/set/urlsafe_base64_encode(ip_info_json_str)
 对于set命令的参数，采用JSON的方式来传递，这样方便未来的扩展，目前支持的就是 IptcInfo 里面的几个字段的修改。
 
 */
-func (this *IptcManager) parse(cmd string) (iptcCmd string, iptcParam string, err error) {
+func (m *IptcManager) parse(cmd string) (iptcCmd string, iptcParam string, err error) {
 	pattern := `^iptc/(view|set/[0-9a-zA-Z-_=]+)$`
 	matched, _ := regexp.MatchString(pattern, cmd)
 	if !matched {
@@ -77,9 +137,9 @@ func (this *IptcManager) parse(cmd string) (iptcCmd string, iptcParam string, er
 /**
 使用CGO的方式调用libiptcdata库的方法
 */
-func (this *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result interface{}, resultType int, contentType string, err error) {
+func (m *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result interface{}, resultType int, contentType string, err error) {
 	reqId := req.ReqId
-	iptcCmd, iptcParam, pErr := this.parse(req.Cmd)
+	iptcCmd, iptcParam, pErr := m.parse(req.Cmd)
 	if pErr != nil {
 		err = pErr
 		return
@@ -87,29 +147,42 @@ func (this *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (resul
 
 	log.Infof("[%s] image iptc cmd `%s` with param `%s`", reqId, iptcCmd, iptcParam)
 	imageURL := req.Url
-	imageFile := filepath.Join(os.TempDir(), "src_"+utils.Md5Hex(fmt.Sprintf("%s%d", imageURL, time.Now().UnixNano())))
+	jobID := utils.Md5Hex(fmt.Sprintf("%s%d", imageURL, time.Now().UnixNano()))
+	imageFile := filepath.Join(os.TempDir(), "src_"+jobID)
 	defer os.Remove(imageFile)
 
 	//download image
-	//
-	// resp, respErr := http.Get(imageURL)
-	// if respErr != nil {
-	// 	err = fmt.Errorf("get image failed: %s", respErr.Error())
-	// 	return
-	// }
-	// //read file into memory
-	// imageData, readErr := ioutil.ReadAll(resp.Body)
-	// resp.Body.Close()
-	// if readErr != nil {
-	// 	err = fmt.Errorf("get image failed: %s", readErr.Error())
-	// 	return
-	// }
-
+	resp, respErr := http.Get(imageURL)
+	if respErr != nil {
+		err = fmt.Errorf("get image failed: %s", respErr.Error())
+		return
+	}
 	//check mimetype
+	reqMime := resp.Header.Get("Content-Type")
+	if reqMime != "image/jpeg" && reqMime != "image/jpg" {
+		err = fmt.Errorf("unsupported image file with mimetype %s", reqMime)
+		//close boy
+		resp.Body.Close()
+		return
+	}
 
-	imageFile = "/Users/jemy/XLab/iptc/test.jpg"
+	//write file to local disk
+	writeFp, openErr := os.Create(imageFile)
+	if openErr != nil {
+		err = fmt.Errorf("open local image file error, %s", openErr.Error())
+		return
+	}
+	_, cpErr := io.Copy(writeFp, resp.Body)
+	resp.Body.Close()
+	if cpErr != nil {
+		err = fmt.Errorf("save local image file error, %s", cpErr.Error())
+		writeFp.Close()
+		return
+	}
+	writeFp.Close()
+
 	if iptcCmd == "view" {
-		return this.getIptcInfo(reqId, imageFile)
+		return m.getIptcInfo(reqId, imageFile)
 	} else {
 		var iptcReq IptcReq
 		iptcReqJson, decodeErr := base64.URLEncoding.DecodeString(iptcParam)
@@ -123,13 +196,14 @@ func (this *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (resul
 			err = fmt.Errorf("invalid iptc set param, %s", decodeErr)
 			return
 		}
-		return this.setIptcInfo(reqId, imageFile, iptcReq)
-	}
 
-	return
+		//do not delete by defer
+		outputFile := filepath.Join(os.TempDir(), "dest_"+jobID)
+		return m.setIptcInfo(reqId, imageFile, iptcReq, outputFile)
+	}
 }
 
-func (this *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{}, resultType int, contentType string, err error) {
+func (m *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{}, resultType int, contentType string, err error) {
 	//get image iptc attribute values
 	cgoImageFile := C.CString(imageFile)
 	cgoImageIptcData := C.iptc_data_new_from_jpeg(cgoImageFile)
@@ -201,19 +275,22 @@ func (this *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{
 	return
 }
 
-func (this *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq) (result interface{},
+func (m *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq, outputFile string) (result interface{},
 	resultType int, contentType string, err error) {
 	//City, ObjectName, Keywords, OriginatingProgram
 	//get image iptc attribute values
 	cgoImageFile := C.CString(imageFile)
+	defer C.free(unsafe.Pointer(cgoImageFile))
 	cgoImageIptcData := C.iptc_data_new_from_jpeg(cgoImageFile)
 	if cgoImageIptcData == nil {
 		//new iptc info found image
 		cgoImageIptcData = C.iptc_data_new()
 	}
 	log.Infof("[%s] image iptc data has %d attributes", reqId, int(cgoImageIptcData.count))
-	//edit iptc image info
+	//set encoding
+	C.iptc_data_set_encoding_utf8(cgoImageIptcData)
 
+	//edit iptc image info
 	//city
 	if iptcReq.City != "" {
 		cgoCityDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_KEYWORDS)
@@ -343,6 +420,16 @@ func (this *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq) (
 	defer C.iptc_data_unref(cgoImageIptcData)
 
 	//write iptc data into jpeg file
+	cgoOutputFile := C.CString(outputFile)
+	defer C.free(unsafe.Pointer(cgoOutputFile))
+	success := C.save_iptc_info_to_jpeg_file(cgoImageIptcData, cgoImageFile, cgoOutputFile)
+	if success != 0 {
+		err = errors.New("write iptc info into image file failed")
+		return
+	}
 
+	result = outputFile
+	resultType = ufop.RESULT_TYPE_OCTET_FILE
+	contentType = "image/jpeg"
 	return
 }

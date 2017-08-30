@@ -23,6 +23,7 @@ import (
 	//"net/http"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/jemygraw/base/container/set"
 	"image/jpeg"
 	"os"
 	"path/filepath"
@@ -106,7 +107,7 @@ func (this *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (resul
 
 	//check mimetype
 
-	imageFile = "/Users/jemy/XLab/iptc/iptc-base.jpg"
+	imageFile = "/Users/jemy/XLab/iptc/test.jpg"
 	if iptcCmd == "view" {
 		return this.getIptcInfo(reqId, imageFile)
 	} else {
@@ -132,6 +133,11 @@ func (this *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{
 	//get image iptc attribute values
 	cgoImageFile := C.CString(imageFile)
 	cgoImageIptcData := C.iptc_data_new_from_jpeg(cgoImageFile)
+	if cgoImageIptcData == nil {
+		err = errors.New("no image iptc found")
+		return
+	}
+
 	defer C.iptc_data_unref(cgoImageIptcData)
 
 	log.Infof("[%s] image iptc data has %d attributes", reqId, int(cgoImageIptcData.count))
@@ -195,8 +201,148 @@ func (this *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{
 	return
 }
 
-func (this *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq) (result interface{}, resultType int, contentType string, err error) {
+func (this *IptcManager) setIptcInfo(reqId, imageFile string, iptcReq IptcReq) (result interface{},
+	resultType int, contentType string, err error) {
 	//City, ObjectName, Keywords, OriginatingProgram
+	//get image iptc attribute values
+	cgoImageFile := C.CString(imageFile)
+	cgoImageIptcData := C.iptc_data_new_from_jpeg(cgoImageFile)
+	if cgoImageIptcData == nil {
+		//new iptc info found image
+		cgoImageIptcData = C.iptc_data_new()
+	}
+	log.Infof("[%s] image iptc data has %d attributes", reqId, int(cgoImageIptcData.count))
+	//edit iptc image info
+
+	//city
+	if iptcReq.City != "" {
+		cgoCityDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_KEYWORDS)
+		if cgoCityDataset == nil {
+			cgoCityDataset := C.iptc_dataset_new()
+			defer C.iptc_dataset_free(cgoCityDataset)
+
+			C.iptc_dataset_set_tag(cgoCityDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_CITY)
+			C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
+				C.uint(len(iptcReq.City)), C.IPTC_VALIDATE)
+			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoCityDataset)
+			if success != 0 {
+				err = errors.New("add attribute City failed")
+				return
+			}
+		} else {
+			success := C.iptc_dataset_set_data(cgoCityDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.City))),
+				C.uint(len(iptcReq.City)), C.IPTC_VALIDATE)
+			if success != 0 {
+				err = errors.New("edit attribute City failed")
+				return
+			}
+		}
+	}
+
+	//object name
+	if iptcReq.ObjectName != "" {
+		cgoObjectNameDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_OBJECT_NAME)
+		if cgoObjectNameDataset == nil {
+			cgoObjectNameDataset = C.iptc_dataset_new()
+			defer C.iptc_dataset_free(cgoObjectNameDataset)
+
+			C.iptc_dataset_set_tag(cgoObjectNameDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_OBJECT_NAME)
+			C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
+				C.uint(len(iptcReq.ObjectName)), C.IPTC_VALIDATE)
+			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoObjectNameDataset)
+			if success != 0 {
+				err = errors.New("add attribute ObjectName failed")
+				return
+			}
+		} else {
+			success := C.iptc_dataset_set_data(cgoObjectNameDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.ObjectName))),
+				C.uint(len(iptcReq.ObjectName)), C.IPTC_VALIDATE)
+			if success != 0 {
+				err = errors.New("edit attribute ObjectName failed")
+				return
+			}
+		}
+	}
+
+	//program
+	if iptcReq.OriginatingProgram != "" {
+		cgoProgramDataset := C.iptc_data_get_dataset(cgoImageIptcData, C.IPTC_RECORD_APP_2, C.IPTC_TAG_ORIGINATING_PROGRAM)
+		if cgoProgramDataset == nil {
+			cgoProgramDataset := C.iptc_dataset_new()
+			defer C.iptc_dataset_free(cgoProgramDataset)
+
+			C.iptc_dataset_set_tag(cgoProgramDataset, C.IPTC_RECORD_APP_2, C.IPTC_TAG_ORIGINATING_PROGRAM)
+			C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
+				C.uint(len(iptcReq.OriginatingProgram)), C.IPTC_VALIDATE)
+			success := C.iptc_data_add_dataset(cgoImageIptcData, cgoProgramDataset)
+			if success != 0 {
+				err = errors.New("add attribute OriginatingProgram failed")
+				return
+			}
+		} else {
+			success := C.iptc_dataset_set_data(cgoProgramDataset, (*C.uchar)(unsafe.Pointer(C.CString(iptcReq.OriginatingProgram))),
+				C.uint(len(iptcReq.OriginatingProgram)), C.IPTC_VALIDATE)
+			if success != 0 {
+				err = errors.New("edit attribute OriginatingProgram failed")
+				return
+			}
+		}
+	}
+
+	oldKeywords := make([]string, 0, cgoImageIptcData.count)
+	//keywords
+	for i := C.uint(0); i < cgoImageIptcData.count; i++ {
+		dataSet := C.get_iptc_dataset(cgoImageIptcData, i)
+		//check name
+		attrName := C.GoString(dataSet.info.name)
+		attrValue := C.GoString((*C.char)(unsafe.Pointer(dataSet.data)))
+		if attrName == "Keywords" {
+			oldKeywords = append(oldKeywords, attrValue)
+		}
+	}
+
+	oldKeywordsSet := set.NewStringSet(oldKeywords...)
+	newKeywordsSet := set.NewStringSet(iptcReq.Keywords...)
+
+	toAddKeywords := newKeywordsSet.Difference(oldKeywordsSet).Elems()
+	toDelKeywords := oldKeywordsSet.Difference(newKeywordsSet).Elems()
+
+	cgoToDelDatasets := make([]*C.struct__IptcDataSet, 0, len(toDelKeywords))
+	for _, keywordToDel := range toDelKeywords {
+		for i := C.uint(0); i < cgoImageIptcData.count; i++ {
+			dataSet := C.get_iptc_dataset(cgoImageIptcData, i)
+			//check name
+			attrName := C.GoString(dataSet.info.name)
+			attrValue := C.GoString((*C.char)(unsafe.Pointer(dataSet.data)))
+			if attrName == "Keywords" && attrValue == keywordToDel {
+				cgoToDelDatasets = append(cgoToDelDatasets, dataSet)
+			}
+		}
+	}
+
+	//delete old datasets
+	for _, dataset := range cgoToDelDatasets {
+		C.iptc_data_remove_dataset(cgoImageIptcData, dataset)
+	}
+
+	//add new datasets
+	for _, keyword := range toAddKeywords {
+		newDataSet := C.iptc_dataset_new()
+		defer C.iptc_dataset_free(newDataSet)
+
+		C.iptc_dataset_set_tag(newDataSet, C.IPTC_RECORD_APP_2, C.IPTC_TAG_KEYWORDS)
+		C.iptc_dataset_set_data(newDataSet, (*C.uchar)(unsafe.Pointer(C.CString(keyword))),
+			C.uint(len(keyword)), C.IPTC_VALIDATE)
+		success := C.iptc_data_add_dataset(cgoImageIptcData, newDataSet)
+		if success != 0 {
+			err = errors.New("add attribute Keywords failed")
+			return
+		}
+	}
+
+	defer C.iptc_data_unref(cgoImageIptcData)
+
+	//write iptc data into jpeg file
 
 	return
 }

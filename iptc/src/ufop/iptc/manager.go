@@ -271,7 +271,7 @@ func (m *IptcManager) getIptcInfo(reqId, imageFile string) (result interface{}, 
 	log.Infof("[%s] image iptc resp: %s", reqId, iptcResp.ToJsonString())
 	result = iptcResp
 	resultType = ufop.RESULT_TYPE_JSON
-	contentType = "application/json"
+	contentType = ufop.CONTENT_TYPE_JSON
 
 	return
 }

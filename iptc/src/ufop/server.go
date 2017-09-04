@@ -134,7 +134,7 @@ func handleJob(ufopReq UfopRequest, ufopBody io.ReadCloser, ufopPrefix string,
 }
 
 func writeJsonError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", CONTENT_TYPE_JSON)
 	w.WriteHeader(statusCode)
 	respErr := struct {
 		Error string `json:"error"`
@@ -149,7 +149,7 @@ func writeJsonError(w http.ResponseWriter, statusCode int, message string) {
 }
 
 func writeJsonResult(w http.ResponseWriter, statusCode int, result interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", CONTENT_TYPE_JSON)
 	w.WriteHeader(statusCode)
 	data, err := json.Marshal(result)
 	if err != nil {
@@ -166,6 +166,8 @@ func writeJsonResult(w http.ResponseWriter, statusCode int, result interface{}) 
 func writeOctetResultFromBytes(w http.ResponseWriter, result interface{}, mimeType string) {
 	if mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
+	} else {
+		w.Header().Set("Content-Type", CONTENT_TYPE_OCTET)
 	}
 	if respData := result.([]byte); respData != nil {
 		_, err := w.Write(respData)
@@ -185,6 +187,8 @@ func writeOctetResultFromFile(w http.ResponseWriter, result interface{}, mimeTyp
 	//set response
 	if mimeType != "" {
 		w.Header().Set("Content-Type", mimeType)
+	} else {
+		w.Header().Set("Content-Type", CONTENT_TYPE_OCTET)
 	}
 	//output result
 	resultFp, openErr := os.Open(filePath)

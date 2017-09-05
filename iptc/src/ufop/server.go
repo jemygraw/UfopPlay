@@ -86,6 +86,7 @@ func (this *UfopServer) serveUfop(w http.ResponseWriter, req *http.Request) {
 	req.ParseForm()
 	ufopReq.Cmd = req.Form.Get("cmd")
 	ufopReq.Url = req.Form.Get("url")
+	ufopReq.MimeType = req.Header.Get("Content-Type")
 
 	reqId := utils.NewRequestId()
 	ufopReq.ReqId = reqId

@@ -16,10 +16,12 @@ const (
 	CONTENT_TYPE_OCTET = "application/octet-stream"
 )
 
+// UfopRequest 表示 UFOP转发请求体，其中 MimeType 为 Url 所指定资源的 Content-Type
 type UfopRequest struct {
-	Cmd   string `json:"cmd"`
-	Url   string `json:"url"`
-	ReqId string `json:"-"`
+	Cmd      string `json:"cmd"`
+	Url      string `json:"url"`
+	MimeType string `json:"-"`
+	ReqId    string `json:"-"`
 }
 
 type UfopError struct {

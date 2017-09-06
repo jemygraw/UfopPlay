@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/qiniu/api.v6/auth/digest"
 	"github.com/qiniu/api.v6/rs"
+	"github.com/qiniu/log"
 	"github.com/qiniu/rpc"
 	"io"
 	"io/ioutil"
@@ -189,6 +190,7 @@ func (this *Mkzipper) parse(cmd string) (bucket string, encoding string, zipFile
 }
 
 func (this *Mkzipper) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result interface{}, resultType int, contentType string, err error) {
+	reqId := req.ReqId
 	//parse command
 	bucket, encoding, zipFiles, ignore404, pErr := this.parse(req.Cmd)
 	if pErr != nil {
@@ -273,7 +275,7 @@ func (this *Mkzipper) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result i
 
 			//convert encoding
 			fname := zipFile.alias
-			fmt.Println("fname:", fname)
+			log.Infof("[%s] processing target file: %s", reqId, fname)
 			if encoding == "gbk" {
 				fname, tErr = utils.Utf82Gbk(fname)
 				if tErr != nil {
@@ -320,5 +322,6 @@ func (this *Mkzipper) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result i
 	result = zipBuffer.Bytes()
 	resultType = ufop.RESULT_TYPE_OCTET_BYTES
 	contentType = "application/zip"
+	log.Infof("[%s] mkzip success!", reqId)
 	return
 }

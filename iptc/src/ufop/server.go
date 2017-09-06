@@ -90,15 +90,14 @@ func (this *UfopServer) serveUfop(w http.ResponseWriter, req *http.Request) {
 
 	reqId := utils.NewRequestId()
 	ufopReq.ReqId = reqId
+
+	ufopReqStr, _ := json.Marshal(&ufopReq)
+	log.Infof("[%s] %s", reqId, string(ufopReqStr))
+
 	ufopResult, ufopResultType, ufopResultContentType, err =
 		handleJob(ufopReq, req.Body, this.cfg.UfopPrefix, this.jobHandlers)
 	if err != nil {
-		ufopErr := UfopError{
-			Request: ufopReq,
-			Error:   err.Error(),
-		}
-		logBytes, _ := json.Marshal(&ufopErr)
-		log.Error(reqId, string(logBytes))
+		log.Errorf("[%s] %s", reqId, err.Error())
 		writeJsonError(w, 400, err.Error())
 	} else {
 		switch ufopResultType {

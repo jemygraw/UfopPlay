@@ -24,11 +24,6 @@ type UfopRequest struct {
 	ReqId    string `json:"-"`
 }
 
-type UfopError struct {
-	Request UfopRequest
-	Error   string
-}
-
 type UfopJobHandler interface {
 	Name() string
 	InitConfig(jobConf string) error

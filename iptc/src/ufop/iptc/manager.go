@@ -161,12 +161,12 @@ func (m *IptcManager) Do(req ufop.UfopRequest, ufopBody io.ReadCloser) (result i
 	//reqMime := resp.Header.Get("Content-Type")
 	reqMime := req.MimeType
 	log.Infof("[%s] Content-Type: %s", reqId, reqMime)
-	// if reqMime != "image/jpeg" && reqMime != "image/jpg" {
-	// 	err = fmt.Errorf("unsupported image file with mimetype %s", reqMime)
-	// 	//close boy
-	// 	resp.Body.Close()
-	// 	return
-	// }
+	if reqMime != "image/jpeg" && reqMime != "image/jpg" {
+		err = fmt.Errorf("unsupported image file with mimetype %s", reqMime)
+		//close boy
+		resp.Body.Close()
+		return
+	}
 
 	//write file to local disk
 	writeFp, openErr := os.Create(imageFile)

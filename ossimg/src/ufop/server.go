@@ -220,6 +220,7 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 	resp, respErr := http.Get(resUrl)
 	if respErr != nil {
 		log.Error("get remote resource error", respErr)
+		_, _ = w.Write([]byte("get remote resource error" + respErr.Error()))
 		return
 	}
 	defer resp.Body.Close()
@@ -236,6 +237,7 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 	_, cpErr := io.Copy(w, resp.Body)
 	if cpErr != nil {
 		log.Error("write octet from remote resource error", cpErr)
+		_, _ = w.Write([]byte("write octet from remote resource error" + cpErr.Error()))
 		return
 	}
 }

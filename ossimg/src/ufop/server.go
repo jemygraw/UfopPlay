@@ -211,6 +211,15 @@ var copyHeaders = []string{
 
 const TimeFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
 
+func writeBody(w http.ResponseWriter, body io.Reader) {
+	_, cpErr := io.Copy(w, body)
+	if cpErr != nil {
+		log.Error("write octet from remote resource error", cpErr)
+		_, _ = w.Write([]byte("write octet from remote resource error" + cpErr.Error()))
+		return
+	}
+}
+
 func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 	var resUrl string
 	if v, ok := result.(string); ok {
@@ -223,6 +232,14 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 		_, _ = w.Write([]byte("get remote resource error" + respErr.Error()))
 		return
 	}
+
+	if resp.StatusCode != 200 {
+		log.Error("get remote resource error", resp.Body)
+		w.WriteHeader(resp.StatusCode)
+		writeBody(w, resp.Body)
+		return
+	}
+
 	defer resp.Body.Close()
 
 	for _, header := range copyHeaders {
@@ -230,14 +247,8 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 			w.Header().Set(header, resp.Header.Get(header))
 		}
 	}
-
 	//write last modified
 	w.Header().Set("Last-Modified", time.Now().UTC().Format(TimeFormat))
 
-	_, cpErr := io.Copy(w, resp.Body)
-	if cpErr != nil {
-		log.Error("write octet from remote resource error", cpErr)
-		_, _ = w.Write([]byte("write octet from remote resource error" + cpErr.Error()))
-		return
-	}
+	writeBody(w, resp.Body)
 }

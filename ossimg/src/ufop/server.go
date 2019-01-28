@@ -220,6 +220,16 @@ func writeBody(w http.ResponseWriter, body io.Reader) {
 	}
 }
 
+func setHeaders(w http.ResponseWriter, resp *http.Response) {
+	for _, header := range copyHeaders {
+		if resp.Header.Get(header) != "" {
+			w.Header().Set(header, resp.Header.Get(header))
+		}
+	}
+	//write last modified
+	w.Header().Set("Last-Modified", time.Now().UTC().Format(TimeFormat))
+}
+
 func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 	var resUrl string
 	if v, ok := result.(string); ok {
@@ -234,21 +244,12 @@ func writeOctetResultFromUrl(w http.ResponseWriter, result interface{}) {
 	}
 
 	if resp.StatusCode != 200 {
-		log.Error("get remote resource error", resp.Body)
-		w.WriteHeader(resp.StatusCode)
-		writeBody(w, resp.Body)
-		return
+		log.Error(resp.Body)
 	}
 
 	defer resp.Body.Close()
 
-	for _, header := range copyHeaders {
-		if resp.Header.Get(header) != "" {
-			w.Header().Set(header, resp.Header.Get(header))
-		}
-	}
-	//write last modified
-	w.Header().Set("Last-Modified", time.Now().UTC().Format(TimeFormat))
-
+	setHeaders(w, resp)
+	w.WriteHeader(resp.StatusCode)
 	writeBody(w, resp.Body)
 }

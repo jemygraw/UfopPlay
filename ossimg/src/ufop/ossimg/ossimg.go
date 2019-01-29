@@ -210,7 +210,7 @@ type ImageInfo struct {
 }
 
 func (this *OSSImager) Name() string {
-	return "ossimg"
+	return "v2-ossimg"
 }
 
 func (this *OSSImager) InitConfig(jobConf string) (err error) {
